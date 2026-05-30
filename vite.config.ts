@@ -7,6 +7,9 @@ const SCRIPT_FILENAME = 'GasDigitalScript.js';
 const CONFIG_FILENAME = 'GasDigitalConfig.json';
 const ICON_FILENAME = 'GasDigitalIcon.png';
 const LANDING_FILENAME = 'index.html';
+const OG_CARD_FILENAME = 'og-card.svg';
+const THEME_COLOR = '#ff6b35';
+const BG_COLOR = '#0b0d12';
 
 const REQUIRED_CONFIG_FIELDS = [
   'name', 'description', 'author', 'authorUrl',
@@ -14,6 +17,65 @@ const REQUIRED_CONFIG_FIELDS = [
   'id', 'iconUrl', 'scriptSignature', 'scriptPublicKey',
   'packages', 'allowEval', 'allowUrls',
 ] as const;
+
+/** Read the width/height of a PNG without taking a dependency. */
+function pngDimensions(path: string): { width: number; height: number } | null {
+  try {
+    const buf = readFileSync(path);
+    if (buf.length < 24) return null;
+    if (buf.readUInt32BE(0) !== 0x89504e47) return null;
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  } catch {
+    return null;
+  }
+}
+
+/** Compose a 1200x630 OG card SVG with the plugin icon, name, and blurb. */
+function ogCardSvg(name: string, blurb: string, iconDataUri: string | null): string {
+  // Squeeze the blurb into roughly two lines.
+  const words = blurb.split(/\s+/);
+  const lines: string[] = ['', ''];
+  let idx = 0;
+  for (const w of words) {
+    if ((lines[idx]!.length + w.length + 1) > 56 && idx === 0) idx = 1;
+    if ((lines[idx]!.length + w.length + 1) > 60) break;
+    lines[idx] = (lines[idx]! + ' ' + w).trim();
+  }
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="bg1" cx="20%" cy="0%" r="60%">
+      <stop offset="0%" stop-color="${THEME_COLOR}" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="${THEME_COLOR}" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bg2" cx="100%" cy="110%" r="55%">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bgbase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${BG_COLOR}"/>
+      <stop offset="100%" stop-color="#14171f"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bgbase)"/>
+  <rect width="1200" height="630" fill="url(#bg1)"/>
+  <rect width="1200" height="630" fill="url(#bg2)"/>
+  <g transform="translate(80,160)">
+    ${iconDataUri ? `<image href="${iconDataUri}" x="0" y="0" width="160" height="160" preserveAspectRatio="xMidYMid slice" clip-path="inset(0 round 32)"/>` : ''}
+    <g transform="translate(${iconDataUri ? 200 : 0}, 0)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+      <text x="0" y="46" fill="${THEME_COLOR}" font-size="22" font-weight="700" letter-spacing="3">GRAYJAY · SOURCE</text>
+      <text x="0" y="120" fill="#e8ecf3" font-size="72" font-weight="800" letter-spacing="-1.5">${esc(name)}</text>
+      <text x="0" y="195" fill="#8b94a8" font-size="28" font-weight="400">${esc(lines[0]!)}</text>
+      <text x="0" y="232" fill="#8b94a8" font-size="28" font-weight="400">${esc(lines[1]!)}</text>
+    </g>
+  </g>
+  <g transform="translate(80, 540)" font-family="ui-monospace, 'SF Mono', Menlo, monospace">
+    <text x="0" y="0" fill="${THEME_COLOR}" font-size="20" font-weight="600">tfolbrecht.github.io/gasdigital-grayjay-plugin</text>
+  </g>
+</svg>
+`;
+}
 
 async function bundleQrcodeForBrowser(): Promise<string> {
   const result = await esbuild({
@@ -33,13 +95,71 @@ async function bundleQrcodeForBrowser(): Promise<string> {
   return result.outputFiles[0]!.text;
 }
 
-function landingHtml(pluginName: string, version: number, qrcodeJs: string): string {
+interface LandingFields {
+  name: string;
+  description: string;
+  version: number;
+  repositoryUrl: string;
+  authorUrl: string;
+  author: string;
+  platformUrl: string;
+  signed: boolean;
+  hasIcon: boolean;
+  sourceUrl: string;
+  iconDims: { width: number; height: number } | null;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function landingHtml(fields: LandingFields, qrcodeJs: string): string {
+  const { name, description, version, repositoryUrl, authorUrl, author, platformUrl, signed, hasIcon, sourceUrl, iconDims } = fields;
+  // sourceUrl points at the config JSON; the landing page sits one path level up.
+  const siteUrl = (() => {
+    try {
+      const u = new URL(sourceUrl);
+      return new URL('./', u).toString();
+    } catch {
+      return '';
+    }
+  })();
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${pluginName} — Grayjay plugin</title>
+  <title>${escapeHtml(name)} — Grayjay plugin</title>
+  <meta name="description" content="${escapeHtml(description)}" />
+  <meta name="theme-color" content="${THEME_COLOR}" />
+  <meta name="color-scheme" content="dark" />
+  ${hasIcon ? `<link rel="icon" type="image/png" href="./${ICON_FILENAME}" />` : ''}
+  ${hasIcon ? `<link rel="apple-touch-icon" href="./${ICON_FILENAME}" />` : ''}
+  ${siteUrl ? `<link rel="canonical" href="${escapeHtml(siteUrl)}" />` : ''}
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Grayjay" />
+  <meta property="og:title" content="${escapeHtml(name)} — Grayjay plugin" />
+  <meta property="og:description" content="${escapeHtml(description)}" />
+  ${siteUrl ? `<meta property="og:url" content="${escapeHtml(siteUrl)}" />` : ''}
+  <meta property="og:image" content="./${OG_CARD_FILENAME}" />
+  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="${escapeHtml(name)} — ${escapeHtml(description)}" />
+
+  <!-- Twitter (prefers PNG; point at the icon as fallback) -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${escapeHtml(name)} — Grayjay plugin" />
+  <meta name="twitter:description" content="${escapeHtml(description)}" />
+  <meta name="twitter:image" content="./${OG_CARD_FILENAME}" />
+  ${hasIcon && iconDims ? `<meta name="twitter:image:src" content="./${ICON_FILENAME}" />` : ''}
   <style>
     :root {
       color-scheme: dark;
@@ -60,9 +180,12 @@ function landingHtml(pluginName: string, version: number, qrcodeJs: string): str
         radial-gradient(900px 700px at 100% 110%, rgba(96,165,250,0.10), transparent 60%),
         linear-gradient(180deg, var(--bg-0), var(--bg-1));
       color: var(--fg);
-      display: grid;
-      place-items: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       padding: 24px;
+      gap: 8px;
     }
     main {
       width: 100%;
@@ -164,25 +287,108 @@ function landingHtml(pluginName: string, version: number, qrcodeJs: string): str
     }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .hero img {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.04);
+      object-fit: cover;
+    }
+    .hero h1 { margin: 0; line-height: 1.15; }
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .badge.signed {
+      color: #4ade80;
+      background: rgba(74, 222, 128, 0.10);
+      border-color: rgba(74, 222, 128, 0.3);
+    }
+    .badge.unsigned {
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.10);
+      border-color: rgba(251, 191, 36, 0.3);
+    }
+    .blurb {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+      margin: 0 0 20px;
+    }
+    .explainer {
+      margin: 20px 0 12px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.55;
+    }
+    .explainer strong { color: var(--fg); }
+    footer {
+      width: 100%;
+      max-width: 480px;
+      margin-top: 18px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    footer a { color: var(--muted); border-bottom: 1px dotted var(--border); }
+    footer a:hover { color: var(--fg); text-decoration: none; }
   </style>
 </head>
 <body>
   <main>
-    <span class="badge">Grayjay source</span>
-    <h1>${pluginName}</h1>
-    <p class="lead">Scan with the Grayjay in-app QR scanner, or tap <em>Open in Grayjay</em> on a phone where Grayjay is installed.</p>
+    <div class="hero">
+      ${hasIcon ? `<img src="./${ICON_FILENAME}" alt="${escapeHtml(name)}" />` : ''}
+      <div>
+        <h1>${escapeHtml(name)}</h1>
+        <div class="badges">
+          <span class="badge">Grayjay source</span>
+          <span class="badge ${signed ? 'signed' : 'unsigned'}">${signed ? 'signed' : 'unsigned'}</span>
+          <span class="badge" style="color: var(--muted); background: rgba(139,148,168,0.08); border-color: var(--border);">v${version}</span>
+        </div>
+      </div>
+    </div>
+    <p class="blurb">${escapeHtml(description)}</p>
+
     <div class="qr" id="qr" aria-label="grayjay:// install deep link"></div>
     <a class="cta" id="cta" href="#">Open in Grayjay</a>
+
     <details class="fallback">
       <summary>Manual install</summary>
-      <p>Settings → Sources → Add Source by URL, paste:</p>
+      <p>In Grayjay: Settings → Sources → Add Source by URL, paste:</p>
       <code class="url" id="url">computing…</code>
     </details>
+
+    <div class="explainer">
+      <strong>What's this?</strong> A community plugin that lets the
+      <a href="https://grayjay.app" target="_blank" rel="noopener">Grayjay</a>
+      video app stream content from
+      <a href="${escapeHtml(platformUrl)}" target="_blank" rel="noopener">${escapeHtml(platformUrl.replace(/^https?:\/\//, ''))}</a>.
+      Sign in once via the in-app webview; episodes play through Grayjay's
+      player, sync to your Polycentric history, and surface in your home feed.
+    </div>
+
     <div class="meta">
-      <span>version <code>${version}</code></span>
-      <span><a href="./${CONFIG_FILENAME}">config</a> · <a href="./${SCRIPT_FILENAME}">script</a></span>
+      <span><a href="./${CONFIG_FILENAME}">config.json</a> · <a href="./${SCRIPT_FILENAME}">script.js</a></span>
+      <span><a href="${escapeHtml(repositoryUrl)}" target="_blank" rel="noopener">source</a></span>
     </div>
   </main>
+  <footer>
+    Made by <a href="${escapeHtml(authorUrl)}" target="_blank" rel="noopener">${escapeHtml(author)}</a>.
+    Not affiliated with Gas Digital Network.
+  </footer>
   <script>${qrcodeJs}</script>
   <script>
     (function () {
@@ -252,9 +458,33 @@ function pluginConfigEmitter(): Plugin {
       }
 
       const qrcodeJs = await bundleQrcodeForBrowser();
+      const hasIcon = existsSync(iconSrc);
+      const iconDims = hasIcon ? pngDimensions(iconSrc) : null;
+      const iconDataUri = hasIcon
+        ? `data:image/png;base64,${readFileSync(iconSrc).toString('base64')}`
+        : null;
+      writeFileSync(
+        resolve(outDir, OG_CARD_FILENAME),
+        ogCardSvg(String(config.name ?? 'Plugin'), String(config.description ?? ''), iconDataUri),
+      );
       writeFileSync(
         resolve(outDir, LANDING_FILENAME),
-        landingHtml(String(config.name), config.version as number, qrcodeJs),
+        landingHtml(
+          {
+            name: String(config.name ?? 'Plugin'),
+            description: String(config.description ?? ''),
+            version: (config.version as number) ?? 0,
+            repositoryUrl: String(config.repositoryUrl ?? ''),
+            authorUrl: String(config.authorUrl ?? ''),
+            author: String(config.author ?? ''),
+            platformUrl: String(config.platformUrl ?? 'https://gasdigital.com'),
+            signed: Boolean(config.scriptSignature) && Boolean(config.scriptPublicKey),
+            hasIcon,
+            sourceUrl: String(config.sourceUrl ?? ''),
+            iconDims,
+          },
+          qrcodeJs,
+        ),
       );
     },
   };
