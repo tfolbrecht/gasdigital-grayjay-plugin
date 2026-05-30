@@ -1,4 +1,5 @@
 import {
+  assertLoggedIn,
   dumpAuthState,
   getEpisode,
   getFeatured,
@@ -24,8 +25,10 @@ import {
 // /view/video/<id>     — episode player (content details in Grayjay terms);
 //                        live URLs carry trailing /width/<W>/height/<H>?position=<s>
 // `www.` prefix tolerated for pasted URLs.
-const SHOW_URL_RE = /^https?:\/\/(?:www\.)?gasdigital\.com\/show\/([A-Za-z0-9_-]+)(?:[/?#].*)?$/;
-const EPISODE_URL_RE = /^https?:\/\/(?:www\.)?gasdigital\.com\/view\/video\/([A-Za-z0-9_-]+)(?:[/?#].*)?$/;
+// ID length bound at {6,32}: real sqids are 12 chars; bound rejects pathological
+// inputs early without false-rejecting future id-format changes.
+const SHOW_URL_RE = /^https?:\/\/(?:www\.)?gasdigital\.com\/show\/([A-Za-z0-9_-]{6,32})(?:[/?#].*)?$/;
+const EPISODE_URL_RE = /^https?:\/\/(?:www\.)?gasdigital\.com\/view\/video\/([A-Za-z0-9_-]{6,32})(?:[/?#].*)?$/;
 
 function extractId(url: string, re: RegExp): string | null {
   const m = url.match(re);
@@ -33,6 +36,9 @@ function extractId(url: string, re: RegExp): string | null {
 }
 
 source.enable = function (config, _settings, savedState) {
+  // enable() is the de-facto post-login callback — Grayjay reloads the entire
+  // JS context after StatePlugins.setPluginAuth + StatePlatform.reloadClient,
+  // so every authed http.GET below this point will carry the captured cookies.
   setPluginId(config.id as string);
   if (savedState) {
     try {
@@ -55,6 +61,9 @@ source.saveState = function () {
 
 source.getHome = function () {
   // Cached public catalogue + lazy per-show fetch via pager.
+  // Pre-flight the session so an empty home doesn't masquerade as "no content" —
+  // unauthed users get a clean login prompt instead.
+  assertLoggedIn();
   const featured = getFeatured();
   return new GasDigitalMultiShowPager(featured);
 };
@@ -86,6 +95,7 @@ source.searchSuggestions = function (query) {
 
 source.search = function (query, _type, _order, _filters) {
   if (!query) return new VideoPager([], false);
+  assertLoggedIn();
   const featured = getFeatured();
   const q = query.toLowerCase();
   const matches = featured.filter((s) => s.name.toLowerCase().includes(q));
@@ -130,6 +140,9 @@ source.getChannelCapabilities = function () {
 source.getChannelContents = function (url) {
   const id = extractId(url, SHOW_URL_RE);
   if (!id) throw new ScriptException(`Not a Gas Digital show URL: ${url}`);
+  // /api/search/?shows= requires auth — fail fast with LoginRequiredException
+  // so Grayjay opens the login webview instead of surfacing HTTP 401.
+  assertLoggedIn();
   const show = getShow(id);
   rememberShow(show.name, show.id);
   return new GasDigitalShowEpisodePager(searchByShowName(show.name, 1));
@@ -153,9 +166,9 @@ source.isContentDetailsUrl = function (url) {
 source.getContentDetails = function (url) {
   const id = extractId(url, EPISODE_URL_RE);
   if (!id) throw new ScriptException(`Not a Gas Digital episode URL: ${url}`);
-  // No explicit isLoggedIn probe — the /api/episodes/{id}/ call goes through
-  // authedGet which proactively refreshes and translates 401/403 into a
-  // LoginRequiredException. Skipping the probe saves one round trip per tap.
+  // /api/episodes/{id}/ requires auth. The session probe is cached for 60s so
+  // tapping multiple episodes in quick succession doesn't re-probe each time.
+  assertLoggedIn();
   const ep = getEpisode(id);
   rememberShow(ep.show.name, ep.show.id);
   return mapEpisodeDetail(ep);

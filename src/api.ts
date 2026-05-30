@@ -4,7 +4,6 @@ import type {
   PaginatedResponse,
   EpisodeSummary,
   ShowDetail,
-  UserSelf,
 } from './types/gasdigital';
 
 export const BASE = 'https://gasdigital.com';
@@ -19,6 +18,14 @@ export const API = `${BASE}/api`;
 const REFRESH_BUFFER_MS = 30_000; // refresh this far before expiration
 const FALLBACK_ACCESS_LIFETIME_MS = 270_000; // 4m30s fallback when body has no expiration
 const SESSION_CHECK_CACHE_MS = 60_000; // cache /api/user/ probe result this long
+
+// Transient HTTP status codes worth a single immediate retry. The Grayjay V8
+// runtime has no `setTimeout`, so retries must be synchronous — fine for
+// load-balancer/proxy hiccups (502/503/504), request timeouts (408), and
+// surprise rate-limit responses (429, which gasdigital doesn't surface
+// today but is cheap to defend against).
+const RETRYABLE_STATUS: ReadonlySet<number> = new Set([408, 429, 502, 503, 504]);
+const MAX_HTTP_RETRY = 1;
 
 let accessExpiresAt = 0;
 let lastSessionCheckAt = 0;
@@ -40,9 +47,53 @@ function needsRefresh(): boolean {
   return accessExpiresAt === 0 || Date.now() >= accessExpiresAt - REFRESH_BUFFER_MS;
 }
 
+/**
+ * Wraps http.GET / http.POST with:
+ *   - a single sync retry on RETRYABLE_STATUS (5xx-ish, 429, 408)
+ *   - try/catch around the underlying call so a thrown network error
+ *     (DNS, TLS, connection-refused) surfaces as a ScriptException with
+ *     enough context to debug from the phone instead of a bare runtime error.
+ *
+ * Auth-401/403 is NOT retried here — that's the cookie-refresh path's job
+ * (see authedGet), which is a different kind of recovery.
+ */
+function safeHttp(
+  method: 'GET' | 'POST',
+  url: string,
+  body: string | null,
+  headers: Record<string, string>,
+  useAuth: boolean,
+): BridgeHttpResponse {
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let resp: BridgeHttpResponse;
+    try {
+      resp = method === 'POST'
+        ? http.POST(url, body ?? '', headers, useAuth)
+        : http.GET(url, headers, useAuth);
+    } catch (e) {
+      if (attempt < MAX_HTTP_RETRY) {
+        attempt++;
+        log(`${method} ${url}: network error, retrying — ${(e as Error).message}`);
+        continue;
+      }
+      throw new ScriptException(
+        `${method} ${url}: network error after ${attempt + 1} attempt(s) — ${(e as Error).message}`,
+      );
+    }
+    if (RETRYABLE_STATUS.has(resp.code) && attempt < MAX_HTTP_RETRY) {
+      attempt++;
+      log(`${method} ${url}: HTTP ${resp.code}, retrying`);
+      continue;
+    }
+    return resp;
+  }
+}
+
 function refreshSession(): boolean {
   const url = `${API}/token/refresh/`;
-  const resp = http.POST(url, '', { 'Content-Type': 'application/json' }, true);
+  const resp = safeHttp('POST', url, '', { 'Content-Type': 'application/json' }, true);
   if (resp.code === 401 || resp.code === 403) {
     accessExpiresAt = 0;
     lastSessionCheckAt = 0; // drop stale "logged in" verdict
@@ -66,10 +117,10 @@ function refreshSession(): boolean {
 
 function authedGet(url: string): BridgeHttpResponse {
   if (needsRefresh()) refreshSession();
-  let resp = http.GET(url, { 'Accept': 'application/json' }, true);
+  let resp = safeHttp('GET', url, null, { 'Accept': 'application/json' }, true);
   if (resp.code === 401 || resp.code === 403) {
     if (refreshSession()) {
-      resp = http.GET(url, { 'Accept': 'application/json' }, true);
+      resp = safeHttp('GET', url, null, { 'Accept': 'application/json' }, true);
     }
   }
   return resp;
@@ -78,7 +129,7 @@ function authedGet(url: string): BridgeHttpResponse {
 function getJson<T>(url: string, useAuth = false): T {
   const resp = useAuth
     ? authedGet(url)
-    : http.GET(url, { 'Accept': 'application/json' }, false);
+    : safeHttp('GET', url, null, { 'Accept': 'application/json' }, false);
   if (resp.code === 401 || resp.code === 403) {
     throw new LoginRequiredException(`GET ${url} requires a subscriber session (HTTP ${resp.code})`);
   }
@@ -94,19 +145,36 @@ function getJson<T>(url: string, useAuth = false): T {
   }
 }
 
-export function getUserSelf(): UserSelf {
-  return getJson<UserSelf>(`${API}/user/`, true);
-}
-
 export function isSessionActive(): boolean {
   const now = Date.now();
   if (now - lastSessionCheckAt < SESSION_CHECK_CACHE_MS) {
     return lastSessionCheckResult;
   }
-  const resp = authedGet(`${API}/user/`);
-  lastSessionCheckResult = resp.code === 200;
+  try {
+    const resp = authedGet(`${API}/user/`);
+    lastSessionCheckResult = resp.code === 200;
+  } catch (e) {
+    log(`isSessionActive probe failed: ${(e as Error).message}`);
+    lastSessionCheckResult = false;
+  }
   lastSessionCheckAt = now;
   return lastSessionCheckResult;
+}
+
+/**
+ * Pre-flight check for plugin methods that need a subscriber session. Throws
+ * LoginRequiredException — Grayjay's UI catches this and opens the configured
+ * authentication webview instead of surfacing a generic error.
+ *
+ * Uses the 60s session-check cache so repeated calls in quick succession (e.g.
+ * a user navigating shows back-to-back) don't each fire a /api/user/ probe.
+ */
+export function assertLoggedIn(): void {
+  if (!isSessionActive()) {
+    throw new LoginRequiredException(
+      'Gas Digital requires an active subscription — sign in via this source to continue.',
+    );
+  }
 }
 
 // /api/featured/ is public; the catalogue rarely changes within a session, so

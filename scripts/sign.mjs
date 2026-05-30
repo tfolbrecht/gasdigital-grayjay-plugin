@@ -44,6 +44,20 @@ config.scriptSignature = signature;
 config.scriptPublicKey = spkiDerBase64;
 writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
 
+// The Vite plugin emits dist/index.html before this script runs, so the badge
+// is baked as "unsigned". Patch it in place rather than duplicate the landing
+// template here — string match is tight enough that an unrelated edit can't
+// silently re-flip it.
+const landingPath = resolve(root, 'dist/index.html');
+if (existsSync(landingPath)) {
+  const before = readFileSync(landingPath, 'utf8');
+  const after = before.replace(
+    /<span class="badge unsigned">unsigned<\/span>/g,
+    '<span class="badge signed">signed</span>',
+  );
+  if (after !== before) writeFileSync(landingPath, after);
+}
+
 console.log(`signed ${scriptPath}`);
 console.log(`  sig:    ${signature.length}B base64`);
 console.log(`  pubkey: ${spkiDerBase64.length}B base64 SPKI`);

@@ -30,9 +30,9 @@
 
   "authentication": {
     "loginUrl": "https://gasdigital.com/login",
-    "completionUrl": "https://gasdigital.com/",
+    "cookiesToFind": ["gdn-jwt", "gdn-jwtr"],
     "domainHeadersToFind": {
-      "gasdigital.com": ["cookie", "user-agent"]
+      "gasdigital.com": ["user-agent"]
     },
     "loginButton": "Sign In"
   }

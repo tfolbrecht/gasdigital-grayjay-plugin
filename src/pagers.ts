@@ -74,6 +74,9 @@ export class GasDigitalMultiShowPager extends VideoPager {
         const top = page.results[0];
         if (top) videos.push(mapEpisodeSummary(top, (n) => (n === show.name ? show.id : undefined)));
       } catch (e) {
+        // Propagate auth failures so Grayjay can drive the login flow; only
+        // swallow per-show errors that are recoverable (404, 5xx on one show).
+        if (e instanceof LoginRequiredException) throw e;
         log(`multi-show pager: skipping ${show.name}: ${(e as Error).message}`);
       }
     }

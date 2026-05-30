@@ -168,39 +168,72 @@ function landingHtml(fields: LandingFields, qrcodeJs: string): string {
       --fg: #e8ecf3;
       --muted: #8b94a8;
       --accent: #ff6b35;
+      --accent-fg: #0b0d12;
       --border: #232838;
+      --border-strong: #2e3447;
+      --panel: rgba(20, 23, 31, 0.55);
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; }
+    html, body { margin: 0; padding: 0; }
     body {
-      margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background:
         radial-gradient(1200px 800px at 20% -10%, rgba(255,107,53,0.12), transparent 60%),
         radial-gradient(900px 700px at 100% 110%, rgba(96,165,250,0.10), transparent 60%),
         linear-gradient(180deg, var(--bg-0), var(--bg-1));
+      background-attachment: fixed;
       color: var(--fg);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      gap: 8px;
+      line-height: 1.55;
+      min-height: 100vh;
     }
-    main {
-      width: 100%;
-      max-width: 480px;
-      background: rgba(20, 23, 31, 0.7);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 32px;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.5);
-      backdrop-filter: blur(8px);
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { width: 100%; max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+    /* Top bar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--fg);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .brand:hover { text-decoration: none; }
+    .brand img {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: rgba(255,255,255,0.04);
+      object-fit: cover;
+    }
+    .topbar nav { display: flex; gap: 18px; font-size: 13px; }
+    .topbar nav a { color: var(--muted); }
+    .topbar nav a:hover { color: var(--fg); text-decoration: none; }
+
+    /* Hero */
+    .hero {
+      padding: 64px 0 72px;
+      display: grid;
+      gap: 24px;
+      justify-items: center;
+      text-align: center;
+    }
+    .badges {
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
     }
     .badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.08em;
@@ -211,183 +244,231 @@ function landingHtml(fields: LandingFields, qrcodeJs: string): string {
       padding: 4px 10px;
       border-radius: 999px;
     }
+    .badge.signed { color: #4ade80; background: rgba(74,222,128,0.10); border-color: rgba(74,222,128,0.3); }
+    .badge.unsigned { color: #fbbf24; background: rgba(251,191,36,0.10); border-color: rgba(251,191,36,0.3); }
+    .badge.neutral { color: var(--muted); background: rgba(139,148,168,0.08); border-color: var(--border); }
     h1 {
-      margin: 12px 0 6px;
-      font-size: 28px;
-      letter-spacing: -0.02em;
+      margin: 0;
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.05;
     }
-    p.lead {
-      margin: 0 0 24px;
+    .tagline {
+      margin: 0;
+      max-width: 580px;
       color: var(--muted);
-      font-size: 15px;
-      line-height: 1.5;
+      font-size: clamp(15px, 2vw, 18px);
     }
-    .qr {
-      background: #fff;
-      border-radius: 14px;
-      padding: 14px;
+    .cta-row { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 13px 22px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 14.5px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.05s ease, filter 0.15s ease, background 0.15s ease;
+    }
+    .btn-primary { background: var(--accent); color: var(--accent-fg); }
+    .btn-primary:hover { filter: brightness(1.08); text-decoration: none; }
+    .btn-primary:active { transform: translateY(1px); }
+    .btn-secondary { background: transparent; color: var(--fg); border-color: var(--border-strong); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.04); text-decoration: none; }
+
+    /* Sections */
+    section { padding: 56px 0; border-top: 1px solid var(--border); }
+    .section-head { margin: 0 0 32px; }
+    .section-head h2 {
+      margin: 0 0 8px;
+      font-size: clamp(22px, 3vw, 28px);
+      letter-spacing: -0.015em;
+    }
+    .section-head p { margin: 0; color: var(--muted); max-width: 640px; }
+
+    /* Install grid */
+    .install-grid { display: grid; gap: 24px; grid-template-columns: 1fr; }
+    @media (min-width: 760px) {
+      .install-grid { grid-template-columns: auto 1fr; align-items: start; }
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(8px);
+    }
+    .qr-panel { text-align: center; padding: 20px; }
+    .qr { background: #fff; border-radius: 12px; padding: 12px; display: inline-block; }
+    .qr-svg { width: 240px; height: 240px; display: block; }
+    .qr-caption { margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+    .steps { display: grid; gap: 18px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+    .steps li {
+      counter-increment: step;
       display: grid;
-      place-items: center;
-      margin: 0 auto 20px;
-      width: fit-content;
+      grid-template-columns: 28px 1fr;
+      gap: 14px;
+      align-items: start;
     }
-    .qr-svg { width: 280px; height: 280px; display: block; }
+    .steps li::before {
+      content: counter(step);
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255, 107, 53, 0.15);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps strong { display: block; color: var(--fg); margin-bottom: 4px; font-weight: 600; }
+    .steps p { margin: 0; color: var(--muted); font-size: 14px; }
     .url {
       display: block;
-      width: 100%;
+      margin-top: 10px;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12.5px;
       color: var(--fg);
       background: #0a0c12;
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 14px;
+      border-radius: 8px;
+      padding: 10px 12px;
       word-break: break-all;
-      text-align: center;
       user-select: all;
     }
-    .cta {
-      display: block;
-      text-align: center;
-      background: var(--accent);
-      color: #0b0d12;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      padding: 14px 18px;
-      border-radius: 12px;
-      margin: 0 0 16px;
-      text-decoration: none;
-      transition: transform 0.05s ease, filter 0.15s ease;
-    }
-    .cta:hover { filter: brightness(1.08); text-decoration: none; }
-    .cta:active { transform: translateY(1px); }
-    .fallback {
-      margin: 0 0 16px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 14px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .fallback summary {
-      cursor: pointer;
-      user-select: none;
-    }
-    .fallback p { margin: 10px 0 8px; }
+
+    /* About */
+    .features { display: grid; gap: 18px; grid-template-columns: 1fr; }
+    @media (min-width: 760px) { .features { grid-template-columns: repeat(3, 1fr); } }
+    .feature { padding: 20px; }
+    .feature h3 { margin: 0 0 8px; font-size: 16px; letter-spacing: -0.005em; }
+    .feature p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    /* Meta strip */
     .meta {
-      margin-top: 18px;
-      display: flex;
-      justify-content: space-between;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .meta code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      color: var(--fg);
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .hero {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-    .hero img {
-      width: 56px;
-      height: 56px;
-      border-radius: 14px;
-      flex-shrink: 0;
-      background: rgba(255,255,255,0.04);
-      object-fit: cover;
-    }
-    .hero h1 { margin: 0; line-height: 1.15; }
-    .badges {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 14px;
-    }
-    .badge.signed {
-      color: #4ade80;
-      background: rgba(74, 222, 128, 0.10);
-      border-color: rgba(74, 222, 128, 0.3);
-    }
-    .badge.unsigned {
-      color: #fbbf24;
-      background: rgba(251, 191, 36, 0.10);
-      border-color: rgba(251, 191, 36, 0.3);
-    }
-    .blurb {
+      gap: 16px;
       color: var(--muted);
-      font-size: 14px;
-      line-height: 1.55;
-      margin: 0 0 20px;
+      font-size: 13px;
+      padding-top: 32px;
+      margin-top: 36px;
+      border-top: 1px solid var(--border);
     }
-    .explainer {
-      margin: 20px 0 12px;
-      padding: 12px 14px;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--muted);
-      font-size: 12.5px;
-      line-height: 1.55;
-    }
-    .explainer strong { color: var(--fg); }
+
+    /* Footer */
     footer {
-      width: 100%;
-      max-width: 480px;
-      margin-top: 18px;
+      padding: 36px 24px 48px;
       text-align: center;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 13px;
+      line-height: 1.7;
+      border-top: 1px solid var(--border);
     }
     footer a { color: var(--muted); border-bottom: 1px dotted var(--border); }
     footer a:hover { color: var(--fg); text-decoration: none; }
   </style>
 </head>
 <body>
-  <main>
-    <div class="hero">
-      ${hasIcon ? `<img src="./${ICON_FILENAME}" alt="${escapeHtml(name)}" />` : ''}
-      <div>
-        <h1>${escapeHtml(name)}</h1>
-        <div class="badges">
-          <span class="badge">Grayjay source</span>
-          <span class="badge ${signed ? 'signed' : 'unsigned'}">${signed ? 'signed' : 'unsigned'}</span>
-          <span class="badge" style="color: var(--muted); background: rgba(139,148,168,0.08); border-color: var(--border);">v${version}</span>
+  <div class="container">
+    <header class="topbar">
+      <a class="brand" href="./">
+        ${hasIcon ? `<img src="./${ICON_FILENAME}" alt="" />` : ''}
+        <span>${escapeHtml(name)}</span>
+      </a>
+      <nav>
+        <a href="#install">Install</a>
+        <a href="${escapeHtml(repositoryUrl)}" target="_blank" rel="noopener">Source</a>
+      </nav>
+    </header>
+
+    <section class="hero" style="border-top:none;">
+      <div class="badges">
+        <span class="badge">Grayjay source</span>
+        <span class="badge ${signed ? 'signed' : 'unsigned'}">${signed ? 'signed' : 'unsigned'}</span>
+        <span class="badge neutral">v${version}</span>
+      </div>
+      <h1>${escapeHtml(name)}</h1>
+      <p class="tagline">${escapeHtml(description)}</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" id="cta" href="#">Open in Grayjay</a>
+        <a class="btn btn-secondary" href="#install">How to install</a>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="section-head">
+        <h2>Install</h2>
+        <p>Scan the QR with your phone, or paste the source URL into Grayjay.</p>
+      </div>
+      <div class="install-grid">
+        <div class="panel qr-panel">
+          <div class="qr" id="qr" aria-label="grayjay:// install deep link"></div>
+          <p class="qr-caption">Scan to install on mobile</p>
+        </div>
+        <ol class="steps panel">
+          <li>
+            <div>
+              <strong>Get Grayjay</strong>
+              <p>Download the app at <a href="https://grayjay.app" target="_blank" rel="noopener">grayjay.app</a>.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Add this source</strong>
+              <p>Settings → Sources → Add Source by URL. Paste:</p>
+              <code class="url" id="url">computing…</code>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Sign in once</strong>
+              <p>The plugin opens a webview the first time. Log in to ${escapeHtml(platformUrl.replace(/^https?:\/\//, ''))} and you're done.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="about">
+      <div class="section-head">
+        <h2>What it does</h2>
+        <p>A community plugin that lets <a href="https://grayjay.app" target="_blank" rel="noopener">Grayjay</a> stream content from <a href="${escapeHtml(platformUrl)}" target="_blank" rel="noopener">${escapeHtml(platformUrl.replace(/^https?:\/\//, ''))}</a>.</p>
+      </div>
+      <div class="features">
+        <div class="feature panel">
+          <h3>Native playback</h3>
+          <p>Episodes play through Grayjay's video player, not an embedded web view.</p>
+        </div>
+        <div class="feature panel">
+          <h3>Unified home feed</h3>
+          <p>New episodes surface in your Grayjay home feed alongside your other sources.</p>
+        </div>
+        <div class="feature panel">
+          <h3>Polycentric sync</h3>
+          <p>Watch history syncs through Polycentric so you can pick up where you left off.</p>
         </div>
       </div>
-    </div>
-    <p class="blurb">${escapeHtml(description)}</p>
 
-    <div class="qr" id="qr" aria-label="grayjay:// install deep link"></div>
-    <a class="cta" id="cta" href="#">Open in Grayjay</a>
+      <div class="meta">
+        <span><a href="./${CONFIG_FILENAME}">config.json</a></span>
+        <span><a href="./${SCRIPT_FILENAME}">script.js</a></span>
+        <span><a href="${escapeHtml(repositoryUrl)}" target="_blank" rel="noopener">View source on GitHub</a></span>
+      </div>
+    </section>
+  </div>
 
-    <details class="fallback">
-      <summary>Manual install</summary>
-      <p>In Grayjay: Settings → Sources → Add Source by URL, paste:</p>
-      <code class="url" id="url">computing…</code>
-    </details>
-
-    <div class="explainer">
-      <strong>What's this?</strong> A community plugin that lets the
-      <a href="https://grayjay.app" target="_blank" rel="noopener">Grayjay</a>
-      video app stream content from
-      <a href="${escapeHtml(platformUrl)}" target="_blank" rel="noopener">${escapeHtml(platformUrl.replace(/^https?:\/\//, ''))}</a>.
-      Sign in once via the in-app webview; episodes play through Grayjay's
-      player, sync to your Polycentric history, and surface in your home feed.
-    </div>
-
-    <div class="meta">
-      <span><a href="./${CONFIG_FILENAME}">config.json</a> · <a href="./${SCRIPT_FILENAME}">script.js</a></span>
-      <span><a href="${escapeHtml(repositoryUrl)}" target="_blank" rel="noopener">source</a></span>
-    </div>
-  </main>
   <footer>
     Made by <a href="${escapeHtml(authorUrl)}" target="_blank" rel="noopener">${escapeHtml(author)}</a>.
-    Not affiliated with Gas Digital Network.
+    Written with love for my friend Misha.<br/>
+    Not affiliated with FUTO, Grayjay, or Gas Digital Network.
   </footer>
   <script>${qrcodeJs}</script>
   <script>
