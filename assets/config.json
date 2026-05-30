@@ -1,0 +1,39 @@
+{
+  "name": "Gas Digital",
+  "description": "Gas Digital Network — shows and episodes from gasdigital.com",
+  "author": "tfolbrecht",
+  "authorUrl": "https://github.com/tfolbrecht",
+
+  "sourceUrl": "https://tfolbrecht.github.io/gasdigital-grayjay-plugin/GasDigitalConfig.json",
+  "repositoryUrl": "https://github.com/tfolbrecht/gasdigital-grayjay-plugin",
+  "scriptUrl": "./GasDigitalScript.js",
+  "version": 1,
+
+  "iconUrl": "./GasDigitalIcon.png",
+  "id": "bfb597e7-2faa-492b-af1a-c6efd78915bb",
+  "platformUrl": "https://gasdigital.com",
+  "enableInSearch": true,
+  "enableInHome": true,
+  "enableInShorts": false,
+
+  "scriptSignature": "",
+  "scriptPublicKey": "",
+  "packages": ["Http"],
+
+  "allowEval": false,
+  "allowUrls": [
+    "gasdigital.com",
+    ".gasdigital.com",
+    "streamingmediahosting.com",
+    ".streamingmediahosting.com"
+  ],
+
+  "authentication": {
+    "loginUrl": "https://gasdigital.com/login",
+    "completionUrl": "https://gasdigital.com/",
+    "domainHeadersToFind": {
+      "gasdigital.com": ["cookie", "user-agent"]
+    },
+    "loginButton": "Sign In"
+  }
+}

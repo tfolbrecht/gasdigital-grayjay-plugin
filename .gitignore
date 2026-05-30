@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.keys/private.pem
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+*.har
+todecode.jwt
+
+grayjay/*

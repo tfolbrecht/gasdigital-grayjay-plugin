@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one in-flight Pages deploy at a time without cancelling running ones.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Materialize the signing key from the PLUGIN_PRIVATE_KEY secret if set.
+      # Without it, the bundle is built unsigned (validator warns; Grayjay
+      # surfaces "Missing Signature" on install).
+      - name: Materialize signing key
+        env:
+          PLUGIN_PRIVATE_KEY: ${{ secrets.PLUGIN_PRIVATE_KEY }}
+        run: |
+          if [ -n "$PLUGIN_PRIVATE_KEY" ]; then
+            mkdir -p .keys
+            printf '%s' "$PLUGIN_PRIVATE_KEY" > .keys/private.pem
+            chmod 600 .keys/private.pem
+            echo "Signing key materialized"
+          else
+            echo "::warning::PLUGIN_PRIVATE_KEY secret not set — building unsigned"
+          fi
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build (bundle + sign + validate)
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
